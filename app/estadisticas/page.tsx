@@ -7,7 +7,8 @@ import {
   Tooltip, AreaChart, Area 
 } from 'recharts';
 
-const CustomTooltip = ({ active, payload, label }) => {
+
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white/50 text-sm md:text-base">
