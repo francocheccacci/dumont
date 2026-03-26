@@ -7,17 +7,42 @@ import {
   Tooltip, AreaChart, Area 
 } from 'recharts';
 
+// 📝 1. DEFINICIÓN DE INTERFACES PARA LOS GRÁFICOS
+interface TopProducto {
+  nombre: string;
+  total_vendido: number;
+  tipo_medida?: string;
+}
 
+interface HoraPico {
+  hora: string;
+  cantidad_tickets: number;
+}
+
+interface MejorDia {
+  dia: string;
+  ingresos: number;
+}
+
+interface StatsData {
+  topProductos: TopProducto[];
+  horasPico: HoraPico[];
+  mejoresDias: MejorDia[];
+  totalHistorico: number;
+}
+
+// 📝 2. TOOLTIP PERSONALIZADO TIPADO
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
+    const data = payload[0];
     return (
       <div className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white/50 text-sm md:text-base">
         <p className="font-bold text-gray-800">{label}</p>
         <p className="text-[#b12431] font-black text-xl">
-          {payload[0].name === "Ingresos" ? '$' : ''}
-          {payload[0].value.toLocaleString('es-AR')}
+          {data.name === "Ingresos" ? '$' : ''}
+          {data.value.toLocaleString('es-AR')}
           <span className="text-xs font-normal text-gray-500 ml-1">
-            {payload[0].payload?.tipo_medida || payload[0].unit || ''}
+            {data.payload?.tipo_medida || data.unit || ''}
           </span>
         </p>
       </div>
@@ -27,28 +52,37 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export default function DashboardEstadisticasFuturista() {
-  const [stats, setStats] = useState({
-    topProductos: [], horasPico: [], mejoresDias: [], totalHistorico: 0
+  // 📝 3. ESTADO CON TIPO DEFINIDO
+  const [stats, setStats] = useState<StatsData>({
+    topProductos: [], 
+    horasPico: [], 
+    mejoresDias: [], 
+    totalHistorico: 0
   });
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState<boolean>(true);
 
   useEffect(() => {
     fetch('/api/estadisticas')
       .then(res => res.json())
-      .then(datos => { setStats(datos); setCargando(false); });
+      .then((datos: StatsData) => { 
+        setStats(datos); 
+        setCargando(false); 
+      })
+      .catch(err => console.error("Error en stats:", err));
   }, []);
 
   if (cargando) {
-    return <div className="h-screen flex flex-col items-center justify-center text-3xl font-bold text-gray-400 gap-4 bg-[#e0e5ec]">
-      <span className="animate-pulse">📊</span> Cargando Métricas...
-    </div>;
+    return (
+      <div className="h-screen flex flex-col items-center justify-center text-3xl font-bold text-gray-400 gap-4 bg-[#e0e5ec]">
+        <span className="animate-pulse">📊</span> Cargando Métricas...
+      </div>
+    );
   }
 
   return (
-    // h-[100dvh] y overflow-hidden garantizan que NUNCA haya scroll en ninguna pantalla
     <div className="h-[100dvh] w-full bg-gradient-to-br from-[#e0e5ec] to-[#f4f7f6] text-gray-800 font-sans p-3 md:p-4 lg:p-6 flex flex-col overflow-hidden">
       
-      {/* 🟢 ENCABEZADO (Altura Fija) */}
+      {/* 🟢 ENCABEZADO */}
       <div className="flex-none flex justify-between items-center mb-4 h-14 md:h-16">
         <div>
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-gray-800 tracking-tight leading-none">📊 Centro de Mando</h2>
@@ -59,11 +93,10 @@ export default function DashboardEstadisticasFuturista() {
         </Link>
       </div>
 
-      {/* 🧩 GRID PRINCIPAL (Se estira para ocupar el resto de la pantalla) */}
-      {/* En celular: 4 filas. En PC/Tablet: 2 filas x 3 columnas */}
+      {/* 🧩 GRID PRINCIPAL */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 grid-rows-4 lg:grid-rows-2 gap-4">
         
-        {/* 💰 CUADRANTE 1: INGRESOS TOTALES (Arriba Izquierda) */}
+        {/* 💰 INGRESOS TOTALES */}
         <div className="lg:col-span-1 lg:row-span-1 relative group overflow-hidden bg-gradient-to-br from-[#b12431] to-red-900 rounded-[2rem] p-6 text-white shadow-lg flex flex-col justify-center">
           <div className="absolute -inset-10 bg-white/10 blur-3xl rounded-full opacity-30"></div>
           <div className="relative z-10 flex flex-col h-full justify-center">
@@ -75,10 +108,10 @@ export default function DashboardEstadisticasFuturista() {
           </div>
         </div>
 
-        {/* ⏰ CUADRANTE 2: HORARIOS PICO (Arriba Centro y Derecha) */}
+        {/* ⏰ HORARIOS PICO */}
         <div className="lg:col-span-2 lg:row-span-1 bg-white/60 backdrop-blur-2xl rounded-[2rem] p-4 md:p-6 shadow-sm border border-white/50 flex flex-col min-h-0">
           <h3 className="text-lg md:text-xl font-black text-blue-800 mb-2 md:mb-4 flex items-center gap-2 flex-none">
-            <span className="text-xl md:text-2xl">⏰</span> Flujo de Ventas por Hora
+            <span className="text-xl md:text-2xl">⏰</span> Flujo de Ventas
           </h3>
           <div className="flex-1 min-h-0 w-full">
             {stats.horasPico.length === 0 ? (
@@ -103,10 +136,10 @@ export default function DashboardEstadisticasFuturista() {
           </div>
         </div>
 
-        {/* 🏆 CUADRANTE 3: PRODUCTOS ESTRELLA (Abajo Izquierda y Centro) */}
+        {/* 🏆 PRODUCTOS ESTRELLA */}
         <div className="lg:col-span-2 lg:row-span-1 bg-white/60 backdrop-blur-2xl rounded-[2rem] p-4 md:p-6 shadow-sm border border-white/50 flex flex-col min-h-0">
           <h3 className="text-lg md:text-xl font-black text-gray-700 mb-2 md:mb-4 flex items-center gap-2 flex-none">
-            <span className="text-xl md:text-2xl">🏆</span> Top 5 Más Vendidos
+            <span className="text-xl md:text-2xl">🏆</span> Más Vendidos
           </h3>
           <div className="flex-1 min-h-0 w-full">
             {stats.topProductos.length === 0 ? (
@@ -116,7 +149,7 @@ export default function DashboardEstadisticasFuturista() {
                 <BarChart data={stats.topProductos} layout="vertical" margin={{ top: 0, right: 20, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.1} horizontal={false} />
                   <YAxis dataKey="nombre" type="category" stroke="rgba(0,0,0,0.5)" tick={{ fontSize: 13, fontWeight: 'bold' }} width={100} />
-                  <XAxis type="number" stroke="rgba(0,0,0,0.3)" tick={{ fontSize: 12 }} hide={true} />
+                  <XAxis type="number" hide={true} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
                   <Bar dataKey="total_vendido" fill="url(#colorUv)" radius={[0, 8, 8, 0]} barSize={24} />
                   <defs>
@@ -131,7 +164,7 @@ export default function DashboardEstadisticasFuturista() {
           </div>
         </div>
 
-        {/* 📅 CUADRANTE 4: MEJORES DÍAS (Abajo Derecha) */}
+        {/* 📅 DÍAS FUERTES */}
         <div className="lg:col-span-1 lg:row-span-1 bg-white/60 backdrop-blur-2xl rounded-[2rem] p-4 md:p-6 shadow-sm border border-white/50 flex flex-col min-h-0">
           <h3 className="text-lg md:text-xl font-black text-emerald-800 mb-2 md:mb-4 flex items-center gap-2 flex-none">
             <span className="text-xl md:text-2xl">📅</span> Días Fuertes
@@ -146,7 +179,7 @@ export default function DashboardEstadisticasFuturista() {
                   <XAxis dataKey="dia" stroke="rgba(0,0,0,0.5)" tick={{ fontSize: 12, fontWeight: 'bold' }} />
                   <YAxis stroke="rgba(0,0,0,0.3)" tick={{ fontSize: 12 }} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
-                  <Bar dataKey="ingresos" fill="url(#colorDia)" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="ingresos" name="Ingresos" fill="url(#colorDia)" radius={[8, 8, 0, 0]} />
                   <defs>
                     <linearGradient id="colorDia" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#34d399" stopOpacity={0.8}/>
