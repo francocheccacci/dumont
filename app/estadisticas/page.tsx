@@ -30,21 +30,24 @@ interface StatsData {
   mejoresDias: MejorDia[];
   totalHistorico: number;
 }
+// 1. Agregamos una interface para los props del Tooltip
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}
 
-// 📝 2. TOOLTIP PERSONALIZADO TIPADO
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
+// 2. Le asignamos la interface a la función
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
-    const data = payload[0];
     return (
-      <div className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white/50 text-sm md:text-base">
-        <p className="font-bold text-gray-800">{label}</p>
-        <p className="text-[#b12431] font-black text-xl">
-          {data.name === "Ingresos" ? '$' : ''}
-          {data.value.toLocaleString('es-AR')}
-          <span className="text-xs font-normal text-gray-500 ml-1">
-            {data.payload?.tipo_medida || data.unit || ''}
-          </span>
-        </p>
+      <div className="bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-gray-200">
+        <p className="text-sm font-bold text-gray-800 mb-1">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-sm text-yellow-600 font-medium">
+            {entry.name}: <span className="text-gray-900">${entry.value.toLocaleString()}</span>
+          </p>
+        ))}
       </div>
     );
   }
