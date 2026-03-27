@@ -1,45 +1,35 @@
 import { conectarDB } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
     const client = await conectarDB();
 
-    // 1. Buscamos los datos generales de la venta (fecha, total)
-    // Turso: El equivalente a .get() es .execute() y tomar el primer elemento de .rows
     const ventaRes = await client.execute({
       sql: 'SELECT * FROM ventas WHERE id = ?',
       args: [id]
     });
 
-    const venta = ventaRes.rows[0];
+    if (!ventaRes.rows[0]) return NextResponse.json({ error: 'No existe' }, { status: 404 });
 
-    if (!venta) {
-      return NextResponse.json({ error: 'Venta no encontrada 🕵️‍♂️' }, { status: 404 });
-    }
-
-    // 2. Buscamos el detalle de los productos que se llevó
-    // Turso: El equivalente a .all() es .execute() y tomar todo el array .rows
+    // JOIN Triple: Trae nombre de Producto O nombre de Combo
     const itemsRes = await client.execute({
       sql: `
-        SELECT vi.*, p.nombre, p.tipo_medida 
+        SELECT 
+          vi.*, 
+          COALESCE(p.nombre, c.nombre) as nombre,
+          COALESCE(p.tipo_medida, 'U.') as tipo_medida
         FROM venta_items vi
-        JOIN productos p ON vi.producto_id = p.id
+        LEFT JOIN productos p ON vi.producto_id = p.id
+        LEFT JOIN combos c ON vi.combo_id = c.id
         WHERE vi.venta_id = ?
       `,
       args: [id]
     });
 
-    const items = itemsRes.rows;
-
-    // Devolvemos todo empaquetado como lo espera tu Frontend
-    return NextResponse.json({ venta, items });
-
+    return NextResponse.json({ venta: ventaRes.rows[0], items: itemsRes.rows });
   } catch (error) {
-    console.error("Error al obtener detalle del ticket en Turso:", error);
-    return NextResponse.json({ error: 'Error al obtener detalle' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

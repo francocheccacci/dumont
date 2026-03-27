@@ -3,72 +3,79 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// 🧾 Función para procesar una NUEVA VENTA
 export async function POST(request) {
   try {
     const { carrito, total } = await request.json();
     const client = await conectarDB();
 
-    // 1. Preparamos el "Batch": una lista de todas las órdenes SQL juntas
-    const operaciones = [];
-
-    // A. Insertar la venta principal
-    operaciones.push({
+    // 1. Insertamos la VENTA primero para obtener su ID real
+    const resVenta = await client.execute({
       sql: `INSERT INTO ventas (total_venta, fecha_hora) 
             VALUES (?, datetime('now', 'localtime'))`,
       args: [total]
     });
 
-    // B. Procesar cada producto del carrito
-    carrito.forEach(item => {
-      // Insertar detalle de la venta
-      // Usamos (SELECT last_insert_rowid()) para agarrar el ID de la venta que acabamos de crear arriba
-      operaciones.push({
-        sql: `INSERT INTO venta_items (venta_id, producto_id, cantidad_vendida, precio_unitario_momento, subtotal) 
-              VALUES ((SELECT last_insert_rowid()), ?, ?, ?, ?)`,
-        args: [item.id, item.cantidad, item.precio_final, item.subtotal]
-      });
+    const ventaId = resVenta.lastInsertRowid; // Este es el ID único de esta venta
+    const operaciones = [];
 
-      // Restar el stock
-      operaciones.push({
-        sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ?',
-        args: [item.cantidad, item.id]
-      });
-    });
+    // 2. Ahora preparamos los productos usando ese ventaId fijo
+    for (const item of carrito) {
+      if (item.esCombo) {
+        // LÓGICA DE COMBO
+        operaciones.push({
+          sql: `INSERT INTO venta_items (venta_id, combo_id, cantidad_vendida, precio_unitario_momento, subtotal) 
+                VALUES (?, ?, ?, ?, ?)`,
+          args: [ventaId, item.id, item.cantidad, item.precio_final, item.subtotal]
+        });
 
-    // 2. Ejecutamos TODO de un solo golpe (Transacción Atómica)
-    const resultado = await client.batch(operaciones, "write");
+        // Descontar stock de ingredientes
+        const ingredientesRes = await client.execute({
+          sql: `SELECT producto_id, cantidad FROM combo_items WHERE combo_id = ?`,
+          args: [item.id]
+        });
 
-    // El ID de la venta es el lastInsertRowid del primer elemento del batch
-    const ventaId = resultado[0].lastInsertRowid?.toString();
+        ingredientesRes.rows.forEach(ing => {
+          operaciones.push({
+            sql: `UPDATE productos SET stock_actual = stock_actual - (? * ?) WHERE id = ?`,
+            args: [ing.cantidad, item.cantidad, ing.producto_id]
+          });
+        });
+      } else {
+        // LÓGICA PRODUCTO SIMPLE
+        operaciones.push({
+          sql: `INSERT INTO venta_items (venta_id, producto_id, cantidad_vendida, precio_unitario_momento, subtotal) 
+                VALUES (?, ?, ?, ?, ?)`,
+          args: [ventaId, item.id, item.cantidad, item.precio_final, item.subtotal]
+        });
+
+        operaciones.push({
+          sql: 'UPDATE productos SET stock_actual = stock_actual - ? WHERE id = ?',
+          args: [item.cantidad, item.id]
+        });
+      }
+    }
+
+    // Ejecutamos todos los items y stocks en un solo lote
+    await client.batch(operaciones, "write");
 
     return NextResponse.json({ 
       success: true, 
-      message: '¡Venta cobrada y guardada en la nube! 🍗✨',
-      numeroTicket: ventaId
+      numeroTicket: ventaId.toString() 
     });
 
   } catch (error) {
-    console.error("Error crítico al cobrar en Turso:", error);
+    console.error("Error crítico en venta:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// 📜 Función para obtener el HISTORIAL
+// El GET se mantiene igual...
 export async function GET() {
   try {
     const client = await conectarDB();
-    
-    // Turso: los datos están en .rows
-    const resultado = await client.execute(`
-      SELECT * FROM ventas 
-      ORDER BY fecha_hora DESC 
-      LIMIT 100
-    `);
-
+    const resultado = await client.execute(`SELECT * FROM ventas ORDER BY fecha_hora DESC LIMIT 100`);
     return NextResponse.json(resultado.rows);
   } catch (error) {
-    console.error("Error al obtener ventas de Turso:", error);
-    return NextResponse.json({ error: 'Error al obtener el historial' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
